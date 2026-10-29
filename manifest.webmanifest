@@ -1,0 +1,16 @@
+{
+  "name": "RutaPerito · Visitas",
+  "short_name": "RutaPerito",
+  "id": "./",
+  "lang": "es",
+  "description": "Agenda, ruta, fotos y medidas por estancia, dictado y firma del Inicio de Peritación.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#0d3d3b",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

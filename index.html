@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d3d3b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RutaPerito">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" href="icon-192.png">
+  <title>RutaPerito</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <!-- Agenda del día -->
+  <section id="vHoy" class="view">
+    <header class="top">
+      <div>
+        <h1>RutaPerito</h1>
+        <button id="btnPerito" class="link-light" type="button"></button>
+      </div>
+      <button id="btnAjustes" class="icon-btn" type="button" aria-label="Ajustes">⚙</button>
+    </header>
+    <nav class="daynav">
+      <button id="diaPrev" class="icon-btn dark" type="button" aria-label="Día anterior">‹</button>
+      <button id="diaHoy" class="day-label" type="button"></button>
+      <button id="diaNext" class="icon-btn dark" type="button" aria-label="Día siguiente">›</button>
+    </nav>
+    <div class="actions-row">
+      <button id="btnRuta" class="btn primary" type="button">🗺 Ruta del día</button>
+      <button id="btnNueva" class="btn" type="button">＋ Visita</button>
+      <label class="btn">📥 Agenda<input id="inAgenda" type="file" accept=".json,.csv,application/json,text/csv" hidden></label>
+    </div>
+    <label class="toggle"><input id="verTodas" type="checkbox"> Ver también las de mi compañero</label>
+    <div id="lista" class="lista"></div>
+    <details class="otros">
+      <summary>Sin fecha / otros días con trabajo pendiente</summary>
+      <div id="listaOtros" class="lista"></div>
+    </details>
+  </section>
+
+  <!-- Visita -->
+  <section id="vVisita" class="view" hidden>
+    <header class="top">
+      <button id="btnVolver" class="icon-btn" type="button" aria-label="Volver">←</button>
+      <div class="grow">
+        <h1 id="vTitulo"></h1>
+        <p id="vSub" class="sub"></p>
+      </div>
+      <button id="btnEditar" class="icon-btn" type="button" aria-label="Editar datos">✎</button>
+    </header>
+    <div class="contacto" id="vContacto"></div>
+
+    <div class="card">
+      <h2>1 · Inicio de Peritación</h2>
+      <p id="inicioEstado" class="estado"></p>
+      <button id="btnFirmar" class="btn primary wide" type="button">✍ Firmar Inicio de Peritación</button>
+    </div>
+
+    <div class="card">
+      <h2>2 · Estancias y daños</h2>
+      <div class="chips" id="chipsEstancia"></div>
+      <div id="estancias"></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Observaciones generales</h2>
+      <div class="dictado">
+        <textarea id="obs" rows="4" placeholder="Estado general, causa, concurrencias, lo que haya que tener en cuenta…"></textarea>
+        <button class="mic" type="button" data-dictar="obs" aria-label="Dictar">🎤</button>
+      </div>
+    </div>
+
+    <div class="card fin">
+      <h2>4 · Visita acabada</h2>
+      <p id="finEstado" class="estado"></p>
+      <button id="btnAcabar" class="btn primary wide big" type="button">📦 Visita acabada · preparar envío</button>
+    </div>
+    <button id="btnBorrarVisita" class="link-danger" type="button">Borrar esta visita del móvil</button>
+  </section>
+
+  <!-- Inputs de fotos compartidos -->
+  <input id="inCamara" type="file" accept="image/*" capture="environment" hidden>
+  <input id="inGaleria" type="file" accept="image/*" multiple hidden>
+
+  <!-- Datos de la visita -->
+  <dialog id="dlgDatos">
+    <form method="dialog" id="fDatos">
+      <h2 id="dlgDatosTitulo">Nueva visita</h2>
+      <label>Nº expediente<input name="exp" inputmode="numeric" required pattern="[0-9A-Za-z\-]{3,15}"></label>
+      <label>Asegurado<input name="nombre" required></label>
+      <label>Dirección<input name="direccion"></label>
+      <label>Municipio<input name="municipio" placeholder="Granada"></label>
+      <label>Teléfonos<input name="telefonos" inputmode="tel" placeholder="600111222 / 958000000"></label>
+      <div class="two">
+        <label>Fecha<input name="fecha" type="date"></label>
+        <label>Hora<input name="hora" type="time"></label>
+      </div>
+      <label>Perito<select name="perito"><option value="">Sin asignar</option><option>Aitor</option><option>Ignacio</option></select></label>
+      <label>Notas de la cita<textarea name="notas" rows="2"></textarea></label>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn" formnovalidate>Cancelar</button>
+        <button value="ok" class="btn primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Firma -->
+  <dialog id="dlgFirma" class="full">
+    <form method="dialog" id="fFirma">
+      <h2>Firma del Inicio de Peritación</h2>
+      <p class="sub" id="firmaResumen"></p>
+      <label>Asegurado (como figura en el documento)<input name="asegurado" required></label>
+      <div class="two">
+        <label>Firma (nombre)<input name="firmante" placeholder="Quien firma"></label>
+        <label>DNI<input name="dni" autocapitalize="characters"></label>
+      </div>
+      <label>Fecha de la visita<input name="fecha" type="date" required></label>
+      <div class="firma-box">
+        <canvas id="cvFirma"></canvas>
+        <span class="firma-hint">Firme aquí con el dedo</span>
+      </div>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn" formnovalidate>Cancelar</button>
+        <button id="btnLimpiarFirma" type="button" class="btn">Borrar</button>
+        <button value="ok" class="btn primary">Guardar firma</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Envío -->
+  <dialog id="dlgEnvio">
+    <h2>Paquete preparado</h2>
+    <p id="envioResumen"></p>
+    <ol class="pasos">
+      <li>Pulsa <b>Enviar a OneDrive</b>.</li>
+      <li>Elige <b>OneDrive</b> (en iPhone: <b>Guardar en Archivos → OneDrive</b>).</li>
+      <li>Guárdalo en <b>Granada Sismo 08.26 / Visitas_App_Entrada</b>.</li>
+    </ol>
+    <div class="dlg-actions col">
+      <button id="btnCompartir" class="btn primary big" type="button">☁ Enviar a OneDrive</button>
+      <button id="btnDescargar" class="btn" type="button">Descargar al móvil</button>
+      <button id="btnEnviado" class="btn" type="button">Ya está guardado en OneDrive ✓</button>
+      <button id="btnCerrarEnvio" class="link" type="button">Cerrar</button>
+    </div>
+  </dialog>
+
+  <!-- Ajustes -->
+  <dialog id="dlgAjustes">
+    <h2>Ajustes</h2>
+    <p>¿Quién usa este móvil?</p>
+    <div class="dlg-actions">
+      <button class="btn" data-perito="Aitor" type="button">Aitor</button>
+      <button class="btn" data-perito="Ignacio" type="button">Ignacio</button>
+    </div>
+    <p id="almacen" class="sub"></p>
+    <button id="btnLimpiar" class="btn wide" type="button">Borrar del móvil las visitas ya enviadas</button>
+    <p class="sub">Instalar: en Android, menú ⋮ → <b>Instalar app</b>. En iPhone (Safari), Compartir → <b>Añadir a pantalla de inicio</b>.</p>
+    <div class="dlg-actions"><button id="btnCerrarAjustes" class="btn primary" type="button">Cerrar</button></div>
+  </dialog>
+
+  <div id="progreso" class="progreso" hidden><div class="spinner"></div><p id="progresoTxt"></p></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script src="zip.js"></script>
+  <script src="pdf.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
