@@ -1,5 +1,5 @@
 // Cache de la app para que abra sin cobertura. Subir VERSION en cada cambio.
-const VERSION = "rp2-v1";
+const VERSION = "rp2-v2";
 const SHELL = ["./", "index.html", "app.css", "app.js", "pdf.js", "zip.js", "vendor/pdf-lib.min.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {

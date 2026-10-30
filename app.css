@@ -62,6 +62,7 @@ label.btn { margin: 0; font-size: 1rem; color: var(--texto); }
 .vcard .meta { color: var(--suave); font-size: .9rem; }
 .vcard .botones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
 .vcard .botones .btn { min-height: 42px; padding: 4px; font-size: .9rem; }
+.aviso { color: var(--aviso); font-size: .85rem; font-weight: 600; margin-top: 2px; }
 .badge { display: inline-block; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: #eee; color: var(--suave); margin-left: auto; white-space: nowrap; }
 .badge.en_curso { background: #fdecd3; color: var(--aviso); }
 .badge.terminada { background: #dcf1e2; color: var(--ok); }

@@ -76,6 +76,7 @@
     const otro = v.perito && perito && v.perito !== perito ? ` · ${esc(v.perito)}` : (!v.perito ? " · sin asignar" : "");
     return `<article class="vcard ${v.estado}">
       <div class="fila1"><span class="hora">${esc(v.hora || "--:--")}</span><span class="nombre">${esc(v.nombre)}</span><span class="badge ${v.estado}">${ESTADOS[v.estado]}</span></div>
+      ${v.confirmada === false && v.estado === "pendiente" ? `<div class="aviso">⏳ Cita sin confirmar</div>` : ""}
       <div class="meta">Exp. ${esc(v.exp)} · ${esc([v.direccion, v.municipio].filter(Boolean).join(", ") || "sin dirección")}${otro}${v.fecha !== dia ? " · " + esc(fechaCorta(v.fecha)) : ""}</div>
       ${nfotos || v.inicio ? `<div class="meta">${v.inicio ? "✍ Inicio firmado · " : ""}${nfotos} fotos</div>` : ""}
       <div class="botones">
@@ -110,7 +111,8 @@
       direccion: String(g("direccion", "riesgo", "address")).trim(), municipio: String(g("municipio", "poblacion")).trim(),
       telefonos, fecha, hora: String(g("hora", "time")).trim().slice(0, 5),
       perito: per.includes("aitor") ? "Aitor" : per.includes("ignacio") ? "Ignacio" : "",
-      notas: String(g("notas", "nota")).trim()
+      notas: String(g("notas", "nota")).trim(),
+      confirmada: o.confirmada === false ? false : o.confirmada === true ? true : undefined
     };
   }
   function parseCSV(text) {
@@ -130,7 +132,7 @@
       if (ex) {
         // La agenda solo actualiza datos de cita; nunca toca fotos, medidas ni firma.
         Object.assign(ex, { nombre: f.nombre !== "(sin nombre)" ? f.nombre : ex.nombre, direccion: f.direccion || ex.direccion, municipio: f.municipio || ex.municipio,
-          telefonos: f.telefonos.length ? f.telefonos : ex.telefonos, fecha: f.fecha || ex.fecha, hora: f.hora || ex.hora, perito: f.perito || ex.perito, notas: f.notas || ex.notas });
+          telefonos: f.telefonos.length ? f.telefonos : ex.telefonos, fecha: f.fecha || ex.fecha, hora: f.hora || ex.hora, perito: f.perito || ex.perito, notas: f.notas || ex.notas, confirmada: f.confirmada ?? ex.confirmada });
         await guardar(ex); act++;
       } else if (!visitas.some(v => v.exp === f.exp && v.fecha === f.fecha)) {
         const v = nuevaVisita(f); visitas.push(v); await guardar(v); nuevas++;
