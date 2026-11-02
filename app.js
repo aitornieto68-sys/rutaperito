@@ -78,12 +78,28 @@
       <div class="fila1"><span class="hora">${esc(v.hora || "--:--")}</span><span class="nombre">${esc(v.nombre)}</span><span class="badge ${v.estado}">${ESTADOS[v.estado]}</span></div>
       ${v.confirmada === false && v.estado === "pendiente" ? `<div class="aviso">⏳ Cita sin confirmar</div>` : ""}
       <div class="meta">Exp. ${esc(v.exp)} · ${esc([v.direccion, v.municipio].filter(Boolean).join(", ") || "sin dirección")}${otro}${v.fecha !== dia ? " · " + esc(fechaCorta(v.fecha)) : ""}</div>
+      ${semaforo(v)}
       ${nfotos || v.inicio ? `<div class="meta">${v.inicio ? "✍ Inicio firmado · " : ""}${nfotos} fotos</div>` : ""}
       <div class="botones">
         ${t ? `<a class="btn" href="tel:${t}">📞</a><a class="btn" href="${waUrl(t)}" target="_blank" rel="noopener">💬</a>` : `<span></span><span></span>`}
         ${v.direccion ? `<a class="btn" href="${mapsUrl(v)}" target="_blank" rel="noopener">🧭</a>` : `<span></span>`}
         <button class="btn primary" data-abrir="${v.id}" type="button">Abrir</button>
       </div></article>`;
+  }
+  // Póliza y justificante de pago: verde si están en la carpeta del expediente, rojo si no (lo calcula el PC al exportar la agenda).
+  function semaforo(v) {
+    const d = v.documentacion;
+    if (!d) return `<div class="semaforo"><span class="sem gris">Documentación sin revisar</span></div>`;
+    return `<div class="semaforo"><span class="sem ${d.poliza ? "si" : "no"}">${d.poliza ? "✓" : "✗"} Póliza</span><span class="sem ${d.pago ? "si" : "no"}">${d.pago ? "✓" : "✗"} Justificante pago</span></div>`;
+  }
+  function pintarDocumentacion(v) {
+    const d = v.documentacion, el = $("docEstado");
+    if (!d) { el.innerHTML = `<p class="estado">Sin revisar. Carga la agenda actualizada (📥) para verlo.</p>`; return; }
+    const fila = (ok, titulo, archivos, falta) => `<div class="docfila ${ok ? "si" : "no"}"><b>${ok ? "✓" : "✗"} ${titulo}</b>
+      <span>${ok ? archivos.map(esc).join("<br>") : falta}</span></div>`;
+    el.innerHTML = fila(d.poliza, "Póliza (condiciones particulares)", d.archivosPoliza || [], "No está en el expediente: pídesela al asegurado en la visita.")
+      + fila(d.pago, "Justificante de pago (recibo / adeudo)", d.archivosPago || [], "No está en el expediente: pídele el recibo y el justificante bancario.")
+      + `<p class="sub">Revisado el ${new Date(d.revisado).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}.</p>`;
   }
   function rutaDelDia() {
     const paradas = visitas.filter(v => v.fecha === dia && esMia(v) && v.direccion && v.estado !== "terminada").sort((a, b) => (a.hora || "99").localeCompare(b.hora || "99"));
@@ -112,7 +128,8 @@
       telefonos, fecha, hora: String(g("hora", "time")).trim().slice(0, 5),
       perito: per.includes("aitor") ? "Aitor" : per.includes("ignacio") ? "Ignacio" : "",
       notas: String(g("notas", "nota")).trim(),
-      confirmada: o.confirmada === false ? false : o.confirmada === true ? true : undefined
+      confirmada: o.confirmada === false ? false : o.confirmada === true ? true : undefined,
+      documentacion: o.documentacion && typeof o.documentacion === "object" ? o.documentacion : undefined
     };
   }
   function parseCSV(text) {
@@ -132,7 +149,7 @@
       if (ex) {
         // La agenda solo actualiza datos de cita; nunca toca fotos, medidas ni firma.
         Object.assign(ex, { nombre: f.nombre !== "(sin nombre)" ? f.nombre : ex.nombre, direccion: f.direccion || ex.direccion, municipio: f.municipio || ex.municipio,
-          telefonos: f.telefonos.length ? f.telefonos : ex.telefonos, fecha: f.fecha || ex.fecha, hora: f.hora || ex.hora, perito: f.perito || ex.perito, notas: f.notas || ex.notas, confirmada: f.confirmada ?? ex.confirmada });
+          telefonos: f.telefonos.length ? f.telefonos : ex.telefonos, fecha: f.fecha || ex.fecha, hora: f.hora || ex.hora, perito: f.perito || ex.perito, notas: f.notas || ex.notas, confirmada: f.confirmada ?? ex.confirmada, documentacion: f.documentacion || ex.documentacion });
         await guardar(ex); act++;
       } else if (!visitas.some(v => v.exp === f.exp && v.fecha === f.fecha)) {
         const v = nuevaVisita(f); visitas.push(v); await guardar(v); nuevas++;
@@ -166,6 +183,7 @@
     $("vContacto").innerHTML = ts.map(t => `<a class="btn small" href="tel:${t}">📞 ${t}</a><a class="btn small" href="${waUrl(t)}" target="_blank" rel="noopener">💬</a>`).join("")
       + (v.direccion ? `<a class="btn small" href="${mapsUrl(v)}" target="_blank" rel="noopener">🧭 Cómo llegar</a>` : "")
       + (v.notas ? `<p class="sub" style="flex-basis:100%">📝 ${esc(v.notas)}</p>` : "");
+    pintarDocumentacion(v);
     const ini = $("inicioEstado");
     if (v.inicio) { ini.className = "estado ok"; ini.textContent = `✓ Firmado el ${RPPdf.fechaLarga(v.inicio.fecha)}${v.inicio.firmante ? " por " + v.inicio.firmante : ""}.`; $("btnFirmar").textContent = "Repetir firma"; $("btnFirmar").classList.remove("primary"); }
     else { ini.className = "estado pend"; ini.textContent = "Pendiente de firma del asegurado."; $("btnFirmar").textContent = "✍ Firmar Inicio de Peritación"; $("btnFirmar").classList.add("primary"); }

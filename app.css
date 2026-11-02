@@ -66,6 +66,15 @@ label.btn { margin: 0; font-size: 1rem; color: var(--texto); }
 .badge { display: inline-block; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: #eee; color: var(--suave); margin-left: auto; white-space: nowrap; }
 .badge.en_curso { background: #fdecd3; color: var(--aviso); }
 .badge.terminada { background: #dcf1e2; color: var(--ok); }
+.semaforo { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+.sem { font-size: .8rem; font-weight: 700; padding: 3px 10px; border-radius: 99px; color: #fff; }
+.sem.si { background: var(--ok); }
+.sem.no { background: var(--mal); }
+.sem.gris { background: #eee; color: var(--suave); }
+.docfila { border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; color: #fff; display: flex; flex-direction: column; gap: 4px; font-size: .9rem; overflow-wrap: anywhere; }
+.docfila b { font-size: 1rem; }
+.docfila.si { background: var(--ok); }
+.docfila.no { background: var(--mal); }
 .vacio { text-align: center; color: var(--suave); padding: 24px 8px; background: #fff; border: 1px dashed var(--borde); border-radius: 14px; }
 .otros { margin-top: 16px; }
 .otros summary { cursor: pointer; color: var(--suave); padding: 8px 0; }
