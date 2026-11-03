@@ -125,7 +125,7 @@
     };
     if (medidas.length) {
       fila(["Estancia", "Concepto", "Medida", "Cantidad", "Fotos"], fb);
-      for (const m of medidas) fila([m.estancia, m.concepto + (m.estimada ? " (estimada)" : ""), m.detalle, `${m.cantidadTxt} ${m.unidad}`, m.fotos.join(", ")], f);
+      for (const m of medidas) fila([m.dano ? `${m.estancia} · ${m.dano}` : m.estancia, m.concepto + (m.estimada ? " (estimada)" : ""), m.detalle, `${m.cantidadTxt} ${m.unidad}`, m.fotos.join(", ")], f);
     }
     y -= 10;
     for (const e of visita.estancias.filter(e => e.notas?.trim())) {

@@ -107,7 +107,8 @@ label.btn { margin: 0; font-size: 1rem; color: var(--texto); }
 .mic.rec { background: var(--mal); animation: pulso 1s infinite; }
 @keyframes pulso { 50% { box-shadow: 0 0 0 8px rgba(179,38,30,.25); } }
 
-.medida { border-top: 1px dashed var(--borde); padding-top: 8px; margin-top: 8px; }
+.medida { border: 1px solid var(--borde); border-radius: 12px; padding: 10px; margin-top: 10px; background: #fcfbf8; }
+.medida .dano-tit { font-weight: 700; color: var(--verde); }
 .medida .g { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .medida .g label { margin: 0; }
 .medida .cab { display: grid; grid-template-columns: 1fr 86px 40px; gap: 6px; align-items: end; }

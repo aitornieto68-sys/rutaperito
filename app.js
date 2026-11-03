@@ -13,7 +13,7 @@
   const ESTADOS = { pendiente: "Pendiente", en_curso: "En curso", terminada: "Enviada" };
 
   let visitas = [], actual = null, dia = hoyISO(), perito = localStorage.getItem("rp-perito") || "";
-  let fotoEstancia = null, saveTimer = null, paquete = null, rec = null;
+  let fotoEstancia = null, fotoDano = null, saveTimer = null, paquete = null, rec = null;
 
   // ---------- IndexedDB ----------
   let dbp;
@@ -72,7 +72,7 @@
   }
   function tarjeta(v) {
     const t = tels(v)[0];
-    const nfotos = v.estancias.reduce((s, e) => s + e.fotos.length, 0);
+    const nfotos = v.estancias.reduce((s, e) => s + fotosEstancia(e).length, 0);
     const otro = v.perito && perito && v.perito !== perito ? ` · ${esc(v.perito)}` : (!v.perito ? " · sin asignar" : "");
     return `<article class="vcard ${v.estado}">
       <div class="fila1"><span class="hora">${esc(v.hora || "--:--")}</span><span class="nombre">${esc(v.nombre)}</span><span class="badge ${v.estado}">${ESTADOS[v.estado]}</span></div>
@@ -214,29 +214,32 @@
     pintarFachada(); pintarEstancias(); pintarFin();
   }
   function pintarFin() {
-    const v = actual, n = v.estancias.reduce((s, e) => s + e.fotos.length, 0), u = v.envios?.[v.envios.length - 1];
+    const v = actual, n = v.estancias.reduce((s, e) => s + fotosEstancia(e).length, 0), u = v.envios?.[v.envios.length - 1];
     const fe = $("finEstado");
     if (u) { fe.className = "estado ok"; fe.textContent = `Paquete ${u.confirmado ? "guardado en OneDrive" : "preparado"} el ${new Date(u.at).toLocaleString("es-ES")}. Si añades algo, vuelve a enviarlo.`; }
     else { fe.className = "estado"; fe.textContent = `${n} fotos · ${v.estancias.length} estancias · ${v.inicio ? "Inicio firmado" : "Inicio SIN firmar"} · ${v.fachada ? "fachada con nº" : "SIN foto de fachada"}.`; }
   }
   let numFoto = new Map();
-  function numerarFotos() { numFoto = new Map(); let n = 0; if (actual.fachada) numFoto.set(actual.fachada, ++n); for (const e of actual.estancias) for (const f of e.fotos) numFoto.set(f, ++n); }
+  function numerarFotos() { numFoto = new Map(); let n = 0; if (actual.fachada) numFoto.set(actual.fachada, ++n); for (const e of actual.estancias) for (const f of fotosEstancia(e)) numFoto.set(f, ++n); }
+  // Fotos de una estancia: las generales y, detrás, las de cada daño en su orden.
+  const fotosDano = m => m.fotos || [];
+  const fotosEstancia = e => e.fotos.concat(...e.medidas.map(fotosDano));
   function pintarEstancias() {
     numerarFotos();
     const abiertas = new Set([...document.querySelectorAll(".estancia[open]")].map(d => d.dataset.id));
     $("estancias").innerHTML = actual.estancias.map((e, i) => `
       <details class="estancia" data-id="${e.id}" ${abiertas.has(e.id) || i === actual.estancias.length - 1 ? "open" : ""}>
-        <summary>▸ ${esc(e.nombre)}<span class="cuenta">${e.fotos.length} fotos · ${e.medidas.length} medidas</span></summary>
+        <summary>▸ ${esc(e.nombre)}<span class="cuenta">${fotosEstancia(e).length} fotos · ${e.medidas.length} daños</span></summary>
         <div class="cuerpo">
           <label>Nombre de la estancia<input class="nombre-est" data-campo="nombre" data-est="${e.id}" value="${esc(e.nombre)}"></label>
           <div class="fotos">${e.fotos.map(f => `<div class="foto"><img data-blob="${f}" alt=""><span class="n">${numFoto.get(f)}</span><button class="x" data-borrafoto="${f}" data-est="${e.id}" type="button" aria-label="Borrar foto">✕</button></div>`).join("")}</div>
-          <div class="foto-btns"><button class="btn primary" data-camara="${e.id}" type="button">📷 Hacer foto</button><button class="btn" data-galeria="${e.id}" type="button">🖼 Galería</button></div>
+          <div class="foto-btns"><button class="btn" data-camara="${e.id}" type="button">📷 Foto general</button><button class="btn" data-galeria="${e.id}" type="button">🖼 Galería</button></div>
           <label>Daños y notas</label>
           <div class="dictado"><textarea rows="3" data-campo="notas" data-est="${e.id}" placeholder="Dicta o escribe: «fisura en pared del salón de 1,20 metros lineales, pintura 3,20 por 2,50»">${esc(e.notas)}</textarea>
           <button class="mic" type="button" data-dictar-est="${e.id}" aria-label="Dictar">🎤</button></div>
-          <div class="medidas">${e.medidas.map(m => medidaHTML(e, m)).join("")}</div>
+          <div class="medidas">${e.medidas.map((m, i) => medidaHTML(e, m, i)).join("")}</div>
           <div class="est-acciones">
-            <button class="btn small" data-addmedida="${e.id}" type="button">＋ Medida</button>
+            <button class="btn small primary" data-addmedida="${e.id}" type="button">＋ Daño (foto y medidas)</button>
             <button class="btn small" data-detectar="${e.id}" type="button">🔎 Medidas del dictado</button>
             <button class="link-danger" style="margin:0 0 0 auto" data-borraest="${e.id}" type="button">Borrar estancia</button>
           </div>
@@ -245,13 +248,16 @@
     $("estancias").insertAdjacentHTML("beforeend", `<datalist id="dlConceptos">${CONCEPTOS.map(c => `<option value="${c}">`).join("")}</datalist>`);
     cargarMiniaturas();
   }
-  function medidaHTML(e, m) {
+  function medidaHTML(e, m, i) {
     const at = `data-est="${e.id}" data-med="${m.id}"`;
     const area = m.unidad === "m²", ud = m.unidad === "ud";
     return `<div class="medida">
+      <div class="dano-tit">Daño ${i + 1}</div>
+      <div class="fotos">${fotosDano(m).map(f => `<div class="foto"><img data-blob="${f}" alt=""><span class="n">${numFoto.get(f)}</span><button class="x" data-borrafoto="${f}" data-est="${e.id}" data-med="${m.id}" type="button" aria-label="Borrar foto">✕</button></div>`).join("")}</div>
+      <div class="foto-btns"><button class="btn ${fotosDano(m).length ? "" : "primary"}" data-camara="${e.id}" data-dano="${m.id}" type="button">📷 Foto del daño</button><button class="btn" data-galeria="${e.id}" data-dano="${m.id}" type="button">🖼 Galería</button></div>
       <div class="cab"><label>Concepto<input list="dlConceptos" data-mcampo="concepto" ${at} value="${esc(m.concepto)}"></label>
         <label>Unidad<select data-mcampo="unidad" ${at}>${["m²", "ml", "ud"].map(u => `<option ${u === m.unidad ? "selected" : ""}>${u}</option>`).join("")}</select></label>
-        <button class="del" data-borramed="${m.id}" data-est="${e.id}" type="button" aria-label="Borrar medida">✕</button></div>
+        <button class="del" data-borramed="${m.id}" data-est="${e.id}" type="button" aria-label="Borrar daño">✕</button></div>
       <div class="g">${ud ? `<label>Cantidad<input inputmode="decimal" data-mcampo="cantidad" ${at} value="${esc(m.cantidad)}"></label>`
         : `<label>${area ? "Largo (m)" : "Longitud (m)"}<input inputmode="decimal" data-mcampo="largo" ${at} value="${esc(m.largo)}"></label>`
         + (area ? `<label>Alto (m)<input inputmode="decimal" data-mcampo="alto" ${at} value="${esc(m.alto)}"></label><label>Descontar m²<input inputmode="decimal" data-mcampo="descuento" ${at} value="${esc(m.descuento)}" placeholder="huecos"></label>` : "")}</div>
@@ -288,7 +294,8 @@
       for (const file of files) {
         const id = uid();
         await blobPut(id, file, file.name || "foto.jpg");
-        e.fotos.push(id);
+        const m = fotoDano && e.medidas.find(x => x.id === fotoDano);
+        if (m) (m.fotos ||= []).push(id); else e.fotos.push(id);
       }
       marcarEnCurso(); await guardar();
     } catch (err) { toast("⚠ No se guardó la foto: " + err.message, 8000); }
@@ -401,7 +408,7 @@
     pararDictado();
     const v = actual;
     await guardar();
-    const nFotos = v.estancias.reduce((s, e) => s + e.fotos.length, 0);
+    const nFotos = v.estancias.reduce((s, e) => s + fotosEstancia(e).length, 0);
     if (!v.inicio && !confirm("El Inicio de Peritación NO está firmado. ¿Preparar el paquete igualmente?")) return;
     if (!v.fachada && !confirm("Falta la foto de la fachada con el número de la vivienda. ¿Preparar el paquete igualmente?")) return;
     if (!nFotos && !confirm("No hay fotos. ¿Preparar el paquete igualmente?")) return;
@@ -412,23 +419,28 @@
       progreso("Reuniendo fotos…");
       numerarFotos();
       const entradas = [], fotos = [], fotosJson = [];
-      const grupos = (v.fachada ? [{ nombre: "Fachada con numero de vivienda", fotos: [v.fachada] }] : []).concat(v.estancias);
+      // Grupos de fotos en el orden de numeración: fachada, y en cada estancia las generales y las de cada daño.
+      const grupos = v.fachada ? [{ nombre: "Fachada con numero de vivienda", archivo: "Fachada con numero de vivienda", fotos: [v.fachada] }] : [];
+      for (const e of v.estancias) {
+        grupos.push({ nombre: e.nombre, archivo: e.nombre, fotos: e.fotos });
+        e.medidas.forEach((m, i) => grupos.push({ nombre: `${e.nombre} · Daño ${i + 1}${m.concepto ? ": " + m.concepto : ""}`, archivo: `${e.nombre} dano ${i + 1}`, fotos: fotosDano(m) }));
+      }
       for (const e of grupos) for (const fid of e.fotos) {
         const b = await blobGet(fid);
         if (!b) continue;
         const n = numFoto.get(fid), data = new Uint8Array(await b.blob.arrayBuffer());
-        const nombre = `Fotografias/${String(n).padStart(3, "0")}_${slug(e.nombre)}.${ext(b)}`;
+        const nombre = `Fotografias/${String(n).padStart(3, "0")}_${slug(e.archivo)}.${ext(b)}`;
         entradas.push({ name: nombre, data });
         fotos.push({ n, estancia: e.nombre, blob: b.blob });
         fotosJson.push({ foto: n, estancia: e.nombre, archivo: nombre.replace("/", "\\"), original: b.name, sha256: await sha256(data) });
       }
       const medidas = [];
-      for (const e of v.estancias) for (const m of e.medidas) {
+      for (const e of v.estancias) e.medidas.forEach((m, i) => {
         const c = cantidad(m);
-        medidas.push({ estancia: e.nombre, concepto: m.concepto || "(sin concepto)", unidad: m.unidad, cantidad: Math.round(c * 100) / 100, cantidadTxt: fmt(c),
+        medidas.push({ estancia: e.nombre, dano: i + 1, concepto: m.concepto || "(sin concepto)", unidad: m.unidad, cantidad: Math.round(c * 100) / 100, cantidadTxt: fmt(c),
           detalle: m.unidad === "m²" ? `${m.largo || 0} × ${m.alto || 0}${num(m.descuento) ? ` − ${m.descuento}` : ""}` : m.unidad === "ml" ? `${m.largo || 0} m` : "",
-          largo: num(m.largo), alto: num(m.alto), descuento: num(m.descuento), estimada: !!m.estimada, fotos: e.fotos.map(f => numFoto.get(f)) });
-      }
+          largo: num(m.largo), alto: num(m.alto), descuento: num(m.descuento), estimada: !!m.estimada, fotos: (fotosDano(m).length ? fotosDano(m) : e.fotos).map(f => numFoto.get(f)) });
+      });
       progreso("Generando reportaje PDF…");
       const rep = await RPPdf.reportaje({ visita: v, perito: quien, fotos, medidas, onProgress: (i, n) => progreso(`Generando reportaje PDF… foto ${i + 1} de ${n}`) });
       const base = `${v.exp}`;
@@ -443,7 +455,7 @@
         fuente: { tipo: "app RutaPerito v2", generado: new Date().toISOString() },
         fachada_numero: v.fachada ? { foto: numFoto.get(v.fachada) } : null,
         inicio_peritacion: v.inicio ? { firmado: true, fecha: v.inicio.fecha, asegurado_en_documento: v.inicio.asegurado, firmante: v.inicio.firmante, dni: v.inicio.dni } : { firmado: false },
-        estancias: v.estancias.map(e => ({ nombre: e.nombre, notas: e.notas, fotos: e.fotos.map(f => numFoto.get(f)) })),
+        estancias: v.estancias.map(e => ({ nombre: e.nombre, notas: e.notas, fotos_generales: e.fotos.map(f => numFoto.get(f)), fotos: fotosEstancia(e).map(f => numFoto.get(f)) })),
         mediciones: medidas.map(({ cantidadTxt, ...m }) => m),
         observaciones: v.observaciones || "",
         fotografias: fotosJson
@@ -487,7 +499,7 @@
   }
 
   async function borrarVisita(v) {
-    const ids = v.estancias.flatMap(e => e.fotos).concat(v.fachada ? [v.fachada] : [], v.inicio ? [v.inicio.pdfId, v.inicio.pngId] : []);
+    const ids = v.estancias.flatMap(e => fotosEstancia(e)).concat(v.fachada ? [v.fachada] : [], v.inicio ? [v.inicio.pdfId, v.inicio.pngId] : []);
     for (const id of ids) await blobDel(id).catch(() => { });
     await dbDel(v.id);
     visitas = visitas.filter(x => x.id !== v.id);
@@ -500,7 +512,7 @@
     const d = t.dataset;
     if (d.abrir) return abrir(d.abrir);
     if (d.estancia) return addEstancia(d.estancia);
-    if (d.camara || d.galeria) { fotoEstancia = d.camara || d.galeria; const inp = $(d.camara ? "inCamara" : "inGaleria"); inp.value = ""; return inp.click(); }
+    if (d.camara || d.galeria) { fotoEstancia = d.camara || d.galeria; fotoDano = d.dano || null; const inp = $(d.camara ? "inCamara" : "inGaleria"); inp.value = ""; return inp.click(); }
     if (d.borrafachada) {
       if (!confirm("¿Borrar la foto de la fachada?")) return;
       const id = actual.fachada; delete actual.fachada; await guardar(); blobDel(id).catch(() => { });
@@ -508,11 +520,17 @@
     }
     if (d.borrafoto) {
       if (!confirm("¿Borrar esta foto?")) return;
-      const e = est(d.est); e.fotos = e.fotos.filter(f => f !== d.borrafoto); await guardar(); blobDel(d.borrafoto).catch(() => { });
+      const e = est(d.est), m = d.med && e.medidas.find(x => x.id === d.med);
+      if (m) m.fotos = fotosDano(m).filter(f => f !== d.borrafoto); else e.fotos = e.fotos.filter(f => f !== d.borrafoto); await guardar(); blobDel(d.borrafoto).catch(() => { });
       pintarEstancias(); return pintarFin();
     }
-    if (d.addmedida) { est(d.addmedida).medidas.push({ id: uid(), concepto: "", unidad: "m²", largo: "", alto: "", descuento: "", cantidad: "", estimada: false }); guardar(); return pintarEstancias(); }
-    if (d.borramed) { const e = est(d.est); e.medidas = e.medidas.filter(m => m.id !== d.borramed); guardar(); return pintarEstancias(); }
+    if (d.addmedida) { est(d.addmedida).medidas.push({ id: uid(), concepto: "", unidad: "m²", largo: "", alto: "", descuento: "", cantidad: "", estimada: false, fotos: [] }); guardar(); return pintarEstancias(); }
+    if (d.borramed) {
+      const e = est(d.est), m = e.medidas.find(x => x.id === d.borramed);
+      if (fotosDano(m).length && !confirm(`¿Borrar este daño con sus ${fotosDano(m).length} fotos?`)) return;
+      e.medidas = e.medidas.filter(x => x !== m); await guardar(); fotosDano(m).forEach(f => blobDel(f).catch(() => { }));
+      pintarEstancias(); return pintarFin();
+    }
     if (d.detectar) {
       const e = est(d.detectar), enc = detectarMedidas(e.notas || "");
       if (!enc.length) return toast("No encuentro medidas en el texto. Di por ejemplo «pintura 3,20 por 2,50» o «fisura 1,20 metros lineales».", 7000);
@@ -522,8 +540,8 @@
     }
     if (d.borraest) {
       const e = est(d.borraest);
-      if (!confirm(`¿Borrar «${e.nombre}» con sus ${e.fotos.length} fotos y ${e.medidas.length} medidas?`)) return;
-      actual.estancias = actual.estancias.filter(x => x !== e); await guardar(); e.fotos.forEach(f => blobDel(f).catch(() => { }));
+      if (!confirm(`¿Borrar «${e.nombre}» con sus ${fotosEstancia(e).length} fotos y ${e.medidas.length} daños?`)) return;
+      actual.estancias = actual.estancias.filter(x => x !== e); await guardar(); fotosEstancia(e).forEach(f => blobDel(f).catch(() => { }));
       pintarEstancias(); return pintarFin();
     }
     if (d.dictarEst) return dictar(document.querySelector(`textarea[data-est="${d.dictarEst}"]`), t);
