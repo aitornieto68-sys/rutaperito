@@ -79,7 +79,7 @@
       ${v.confirmada === false && v.estado === "pendiente" ? `<div class="aviso">⏳ Cita sin confirmar</div>` : ""}
       <div class="meta">Exp. ${esc(v.exp)} · ${esc([v.direccion, v.municipio].filter(Boolean).join(", ") || "sin dirección")}${otro}${v.fecha !== dia ? " · " + esc(fechaCorta(v.fecha)) : ""}</div>
       ${semaforo(v)}
-      ${nfotos || v.inicio ? `<div class="meta">${v.inicio ? "✍ Inicio firmado · " : ""}${nfotos} fotos</div>` : ""}
+      ${nfotos || v.inicio || v.fachada ? `<div class="meta">${v.inicio ? "✍ Inicio firmado · " : ""}${v.fachada ? "🏠 fachada · " : ""}${nfotos} fotos</div>` : ""}
       <div class="botones">
         ${t ? `<a class="btn" href="tel:${t}">📞</a><a class="btn" href="${waUrl(t)}" target="_blank" rel="noopener">💬</a>` : `<span></span><span></span>`}
         ${v.direccion ? `<a class="btn" href="${mapsUrl(v)}" target="_blank" rel="noopener">🧭</a>` : `<span></span>`}
@@ -187,19 +187,40 @@
     const ini = $("inicioEstado");
     if (v.inicio) { ini.className = "estado ok"; ini.textContent = `✓ Firmado el ${RPPdf.fechaLarga(v.inicio.fecha)}${v.inicio.firmante ? " por " + v.inicio.firmante : ""}.`; $("btnFirmar").textContent = "Repetir firma"; $("btnFirmar").classList.remove("primary"); }
     else { ini.className = "estado pend"; ini.textContent = "Pendiente de firma del asegurado."; $("btnFirmar").textContent = "✍ Firmar Inicio de Peritación"; $("btnFirmar").classList.add("primary"); }
+    pintarFachada();
     $("chipsEstancia").innerHTML = ESTANCIAS.map(e => `<button class="chip" data-estancia="${e}" type="button">＋ ${e}</button>`).join("");
     $("obs").value = v.observaciones || "";
     pintarEstancias();
     pintarFin();
   }
+  // Foto de la fachada donde se lee el número de la vivienda; va como foto 1 del reportaje.
+  function pintarFachada() {
+    const f = actual.fachada, fe = $("fachadaEstado");
+    fe.className = f ? "estado ok" : "estado pend";
+    fe.textContent = f ? "✓ Foto de la fachada con el número de la vivienda." : "Falta la foto de la fachada donde se vea el número de la vivienda.";
+    $("fachadaFoto").innerHTML = f ? `<div class="foto"><img data-blob="${f}" alt="Fachada"><button class="x" data-borrafachada="1" type="button" aria-label="Borrar foto">✕</button></div>` : "";
+    $("btnFachada").textContent = f ? "🏠 Repetir foto fachada" : "🏠 Foto fachada con nº";
+    $("btnFachada").classList.toggle("primary", !f);
+    cargarMiniaturas();
+  }
+  async function setFachada(file) {
+    if (!file) return;
+    try {
+      const id = uid(), viejo = actual.fachada;
+      await blobPut(id, file, file.name || "fachada.jpg");
+      actual.fachada = id; marcarEnCurso(); await guardar();
+      if (viejo) blobDel(viejo).catch(() => { });
+    } catch (err) { return toast("⚠ No se guardó la foto: " + err.message, 8000); }
+    pintarFachada(); pintarEstancias(); pintarFin();
+  }
   function pintarFin() {
     const v = actual, n = v.estancias.reduce((s, e) => s + e.fotos.length, 0), u = v.envios?.[v.envios.length - 1];
     const fe = $("finEstado");
     if (u) { fe.className = "estado ok"; fe.textContent = `Paquete ${u.confirmado ? "guardado en OneDrive" : "preparado"} el ${new Date(u.at).toLocaleString("es-ES")}. Si añades algo, vuelve a enviarlo.`; }
-    else { fe.className = "estado"; fe.textContent = `${n} fotos · ${v.estancias.length} estancias · ${v.inicio ? "Inicio firmado" : "Inicio SIN firmar"}.`; }
+    else { fe.className = "estado"; fe.textContent = `${n} fotos · ${v.estancias.length} estancias · ${v.inicio ? "Inicio firmado" : "Inicio SIN firmar"} · ${v.fachada ? "fachada con nº" : "SIN foto de fachada"}.`; }
   }
   let numFoto = new Map();
-  function numerarFotos() { numFoto = new Map(); let n = 0; for (const e of actual.estancias) for (const f of e.fotos) numFoto.set(f, ++n); }
+  function numerarFotos() { numFoto = new Map(); let n = 0; if (actual.fachada) numFoto.set(actual.fachada, ++n); for (const e of actual.estancias) for (const f of e.fotos) numFoto.set(f, ++n); }
   function pintarEstancias() {
     numerarFotos();
     const abiertas = new Set([...document.querySelectorAll(".estancia[open]")].map(d => d.dataset.id));
@@ -382,6 +403,7 @@
     await guardar();
     const nFotos = v.estancias.reduce((s, e) => s + e.fotos.length, 0);
     if (!v.inicio && !confirm("El Inicio de Peritación NO está firmado. ¿Preparar el paquete igualmente?")) return;
+    if (!v.fachada && !confirm("Falta la foto de la fachada con el número de la vivienda. ¿Preparar el paquete igualmente?")) return;
     if (!nFotos && !confirm("No hay fotos. ¿Preparar el paquete igualmente?")) return;
     const fecha = v.inicio?.fecha || hoyISO();
     v.fechaVisita = fecha;
@@ -390,7 +412,8 @@
       progreso("Reuniendo fotos…");
       numerarFotos();
       const entradas = [], fotos = [], fotosJson = [];
-      for (const e of v.estancias) for (const fid of e.fotos) {
+      const grupos = (v.fachada ? [{ nombre: "Fachada con numero de vivienda", fotos: [v.fachada] }] : []).concat(v.estancias);
+      for (const e of grupos) for (const fid of e.fotos) {
         const b = await blobGet(fid);
         if (!b) continue;
         const n = numFoto.get(fid), data = new Uint8Array(await b.blob.arrayBuffer());
@@ -418,6 +441,7 @@
         expediente: v.exp, fecha_visita: fecha, perito: quien, asegurado: v.nombre,
         riesgo: [v.direccion, v.municipio].filter(Boolean).join(", "), telefonos: v.telefonos,
         fuente: { tipo: "app RutaPerito v2", generado: new Date().toISOString() },
+        fachada_numero: v.fachada ? { foto: numFoto.get(v.fachada) } : null,
         inicio_peritacion: v.inicio ? { firmado: true, fecha: v.inicio.fecha, asegurado_en_documento: v.inicio.asegurado, firmante: v.inicio.firmante, dni: v.inicio.dni } : { firmado: false },
         estancias: v.estancias.map(e => ({ nombre: e.nombre, notas: e.notas, fotos: e.fotos.map(f => numFoto.get(f)) })),
         mediciones: medidas.map(({ cantidadTxt, ...m }) => m),
@@ -463,7 +487,7 @@
   }
 
   async function borrarVisita(v) {
-    const ids = v.estancias.flatMap(e => e.fotos).concat(v.inicio ? [v.inicio.pdfId, v.inicio.pngId] : []);
+    const ids = v.estancias.flatMap(e => e.fotos).concat(v.fachada ? [v.fachada] : [], v.inicio ? [v.inicio.pdfId, v.inicio.pngId] : []);
     for (const id of ids) await blobDel(id).catch(() => { });
     await dbDel(v.id);
     visitas = visitas.filter(x => x.id !== v.id);
@@ -477,6 +501,11 @@
     if (d.abrir) return abrir(d.abrir);
     if (d.estancia) return addEstancia(d.estancia);
     if (d.camara || d.galeria) { fotoEstancia = d.camara || d.galeria; const inp = $(d.camara ? "inCamara" : "inGaleria"); inp.value = ""; return inp.click(); }
+    if (d.borrafachada) {
+      if (!confirm("¿Borrar la foto de la fachada?")) return;
+      const id = actual.fachada; delete actual.fachada; await guardar(); blobDel(id).catch(() => { });
+      pintarFachada(); pintarEstancias(); return pintarFin();
+    }
     if (d.borrafoto) {
       if (!confirm("¿Borrar esta foto?")) return;
       const e = est(d.est); e.fotos = e.fotos.filter(f => f !== d.borrafoto); await guardar(); blobDel(d.borrafoto).catch(() => { });
@@ -518,6 +547,10 @@
 
   $("inCamara").addEventListener("change", e => addFotos([...e.target.files]));
   $("inGaleria").addEventListener("change", e => addFotos([...e.target.files]));
+  $("inFachada").addEventListener("change", e => setFachada(e.target.files[0]));
+  $("inFachadaGal").addEventListener("change", e => setFachada(e.target.files[0]));
+  $("btnFachada").onclick = () => { $("inFachada").value = ""; $("inFachada").click(); };
+  $("btnFachadaGal").onclick = () => { $("inFachadaGal").value = ""; $("inFachadaGal").click(); };
   $("inAgenda").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) importarAgenda(f).catch(err => toast("⚠ Agenda no válida: " + err.message, 7000)); });
   $("diaPrev").onclick = () => { const d = new Date(dia + "T12:00:00"); d.setDate(d.getDate() - 1); dia = hoyISO(d); pintarHoy(); };
   $("diaNext").onclick = () => { const d = new Date(dia + "T12:00:00"); d.setDate(d.getDate() + 1); dia = hoyISO(d); pintarHoy(); };
